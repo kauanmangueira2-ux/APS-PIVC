@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logs · Cofre Biométrico</title><link rel="stylesheet" href="style.css"></head>
+<body class="admin">
+<div id="alerta" class="banner" role="alert" hidden></div>
+<main>
+  <div class="pagina">
+    <h1>Logs de acesso</h1>
+    <p class="sub">Todas as tentativas de acesso, com filtros e exportação.</p>
+  </div>
+  <div class="numeros" id="numeros" aria-label="Números de hoje">
+    <div class="numero"><span>Tentativas hoje</span><strong id="nTotal">–</strong></div>
+    <div class="numero ok"><span>Concedidos</span><strong id="nConcedidos">–</strong></div>
+    <div class="numero"><span>Negados</span><strong id="nNegados">–</strong></div>
+    <div class="numero"><span>Não reconhecidos</span><strong id="nNaoRec">–</strong></div>
+    <div class="numero no"><span>Alertas no cofre</span><strong id="nAlertas">–</strong></div>
+  </div>
+  <div class="card row">
+    <label>De <input type="date" id="inicio"></label>
+    <label>Até <input type="date" id="fim"></label>
+    <label class="grow">Pessoa <select id="usuario"><option value="">Todas</option></select></label>
+    <label class="grow">Resultado <select id="resultado"><option value="">Todos</option></select></label>
+    <div class="acoes">
+      <button id="filtrar">Filtrar</button>
+      <button id="csv" class="sec">Exportar CSV</button>
+      <button id="pdf" class="sec">Exportar PDF</button>
+    </div>
+  </div>
+  <div id="saida" aria-live="polite"></div>
+  <div class="card tbl"><div class="rolagem"><table>
+    <thead><tr><th>Data/hora</th><th>Pessoa</th><th>Recurso</th><th>Resultado</th><th>Score</th><th>Evidência</th></tr></thead>
+    <tbody id="corpo"></tbody></table></div>
+    <div class="resumo" id="resumo"></div></div>
+</main>
+<script src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+$("resultado").innerHTML += Object.entries(ROTULOS).map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+
+function filtros() {
+  const p = new URLSearchParams();
+  for (const k of ["inicio", "fim", "usuario", "resultado"]) {
+    const v = $(k).value; if (v) p.set(k === "usuario" ? "usuario_id" : k, v);
+  }
+  return p;
+}
+
+async function carregar() {
+  try {
+    const regs = await api("/api/logs?" + filtros(), {}, true);
+    $("saida").innerHTML = "";
+    $("corpo").innerHTML = regs.map(r => `<tr>
+      <td>${esc(dataHora(r.ocorrido_em))}</td><td>${esc(r.usuario || "— não reconhecido —")}</td><td>${esc(r.recurso || "—")}</td>
+      <td><span class="pill ${r.resultado === "concedido" ? "ok" : "no"}">${esc(ROTULOS[r.resultado] || r.resultado)}</span></td>
+      <td>${r.score == null ? "" : r.score.toFixed(3)}</td>
+      <td>${r.evidencia ? `<button class="link" data-evidencia="${esc(r.evidencia.split("/").pop())}" data-titulo="${esc(dataHora(r.ocorrido_em))} · ${esc(r.usuario || "não reconhecido")}">Ver foto</button>` : ""}</td></tr>`).join("")
+      || `<tr><td colspan="6" class="vazio-tab">Nenhum registro para o filtro.</td></tr>`;
+    $("resumo").textContent = `${regs.length} registro(s)` + (regs.length >= 500 ? " · exibindo os 500 mais recentes; a exportação traz até 10.000" : "");
+  } catch (e) { $("saida").innerHTML = bloco("no", e.message); }
+}
+
+async function exportar(formato) {
+  try {
+    const blob = await api(`/api/logs/exportar?formato=${formato}&` + filtros(), {}, true);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `auditoria.${formato}`; a.click();
+  } catch (e) { $("saida").innerHTML = bloco("no", e.message); }
+}
+
+async function numeros() {
+  try {
+    const n = await api("/api/resumo", {}, true);
+    $("nTotal").textContent = n.total; $("nConcedidos").textContent = n.concedidos;
+    $("nNegados").textContent = n.negados; $("nNaoRec").textContent = n.nao_reconhecidos;
+    $("nAlertas").textContent = n.alertas;
+  } catch { /* o carregamento principal já mostra o erro */ }
+}
+
+$("corpo").onclick = async ev => {
+  const b = ev.target.closest("button[data-evidencia]"); if (!b) return;
+  try { await mostrarImagemAdmin(`/api/evidencia/${encodeURIComponent(b.dataset.evidencia)}`, `Evidência · ${b.dataset.titulo}`); }
+  catch (e) { $("saida").innerHTML = bloco("no", e.message); }
+};
+
+async function alertas() {
+  try {
+    const a = await api("/api/alertas", {}, true);
+    $("alerta").hidden = !a.length;
+    if (a.length) $("alerta").innerHTML = ICONES.aviso +
+      `<span>Alerta: ${a.length} tentativa(s) negada(s) no cofre principal nos últimos minutos. Última: ${esc(ROTULOS[a[0].resultado] || a[0].resultado)}.</span>`;
+  } catch { /* sem token ou API fora: o carregamento principal já mostra o erro */ }
+}
+
+$("filtrar").onclick = carregar;
+$("csv").onclick = () => exportar("csv");
+$("pdf").onclick = () => exportar("pdf");
+
+exigirAdmin().then(async () => {
+  try {
+    const us = await api("/api/usuarios", {}, true);
+    $("usuario").innerHTML += us.map(u => `<option value="${u.id}">${esc(u.nome)}</option>`).join("");
+  } catch (e) { /* tratado em carregar() */ }
+  carregar(); alertas(); numeros();
+  setInterval(() => { alertas(); numeros(); }, 10000);
+});
+</script></body></html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cadastro · Cofre Biométrico</title><link rel="stylesheet" href="style.css"></head>
+<body class="admin"><main>
+  <div class="pagina">
+    <h1>Cadastrar pessoa</h1>
+    <p class="sub">Preencha os dados e capture de 3 a 5 fotos: frontal, levemente de lado, com boa e com pouca luz.</p>
+  </div>
+  <div class="cadastro">
+    <section class="card">
+      <h2>Dados</h2>
+      <form id="form" class="campos" autocomplete="off">
+        <label class="largo">Nome completo <input name="nome" required></label>
+        <label>Matrícula <input name="matricula" required></label>
+        <label>Cargo <input name="cargo"></label>
+        <label class="largo">Nível de acesso
+          <select name="nivel" id="nivel">
+            <option value="1">1 · Servidor</option>
+            <option value="2">2 · Diretor de divisão</option>
+            <option value="3">3 · Ministro</option></select></label>
+        <label id="boxDiv" class="largo" hidden>Divisão <select name="divisao_id" id="divisao"></select></label>
+        <label id="boxPin" class="largo" hidden>PIN (6 dígitos)
+          <input name="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Biometria</h2>
+      <div class="cam"><video id="video" playsinline muted></video><div class="guia"></div></div>
+      <div class="acoes" style="margin-top:14px">
+        <button id="foto" type="button">Capturar foto</button>
+        <button id="limpar" type="button" class="sec">Limpar fotos</button>
+        <span class="mut" id="contador" style="margin-left:auto;font-size:.88rem">0 de 5 fotos</span>
+      </div>
+      <div class="fotos" id="fotos"></div>
+    </section>
+  </div>
+  <div class="acoes" style="margin-top:16px"><button id="salvar" type="button">Salvar cadastro</button></div>
+  <div id="saida" aria-live="polite"></div>
+</main>
+<script src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+// Cada foto: { blob, url, estado: "verificando" | "ok" | "aviso" | "no", texto }
+const fotos = [];
+
+function msg(classe, t) { $("saida").innerHTML = bloco(classe, t); }
+function atualizar() {
+  const n = +$("nivel").value;
+  $("boxDiv").hidden = n !== 2; $("boxPin").hidden = n !== 3;
+}
+function desenharFotos() {
+  $("fotos").innerHTML = "";
+  fotos.forEach((f, i) => {
+    const w = document.createElement("div"); w.className = `foto ${f.estado}`;
+    const img = new Image(); img.src = f.url; img.alt = `Foto ${i + 1}`;
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "×"; x.title = "Remover esta foto";
+    x.setAttribute("aria-label", `Remover foto ${i + 1}`);
+    x.onclick = () => { URL.revokeObjectURL(f.url); fotos.splice(i, 1); desenharFotos(); };
+    const st = document.createElement("span"); st.className = "estado"; st.textContent = f.texto;
+    w.append(img, x, st); $("fotos").append(w);
+  });
+  const boas = fotos.filter(f => f.estado === "ok" || f.estado === "aviso").length;
+  $("contador").textContent = `${fotos.length} de 5 fotos · ${boas} aprovada(s)`;
+}
+
+// Confere a foto no servidor assim que é capturada: rosto único, nítido, claro e se já existe no cadastro.
+async function verificar(f) {
+  const fd = new FormData(); fd.append("foto", f.blob, "f.jpg");
+  try {
+    const r = await api("/api/qualidade", { method: "POST", body: fd }, true);
+    if (r.ja_cadastrado) { f.estado = "no"; f.texto = `Já cadastrado: ${r.ja_cadastrado}`; }
+    else if (r.qualidade < 0.7) { f.estado = "aviso"; f.texto = "Aceita, mas pouco nítida"; }
+    else { f.estado = "ok"; f.texto = "Foto boa"; }
+  } catch (e) { f.estado = "no"; f.texto = e.message; }
+  desenharFotos();
+}
+
+$("nivel").onchange = atualizar;
+$("foto").onclick = async () => {
+  if (fotos.length >= 5) return msg("aviso", "Máximo de 5 fotos. Remova alguma ou use \"Limpar fotos\".");
+  try {
+    const blob = await quadro($("video"));
+    const f = { blob, url: URL.createObjectURL(blob), estado: "", texto: "Verificando…" };
+    fotos.push(f); desenharFotos(); $("saida").innerHTML = "";
+    verificar(f);
+  } catch (e) { msg("aviso", e.message); }
+};
+$("limpar").onclick = () => { fotos.forEach(f => URL.revokeObjectURL(f.url)); fotos.length = 0; desenharFotos(); };
+
+$("salvar").onclick = async () => {
+  if (!$("form").reportValidity()) return;
+  if (fotos.some(f => f.estado === "")) return msg("aviso", "Aguarde a verificação das fotos.");
+  if (fotos.some(f => f.estado === "no")) return msg("aviso", "Remova as fotos marcadas em vermelho e capture outras.");
+  if (fotos.length < 3) return msg("aviso", "Capture pelo menos 3 fotos aprovadas.");
+  const fd = new FormData($("form"));
+  if (+$("nivel").value !== 2) fd.delete("divisao_id");
+  fotos.forEach((f, i) => fd.append("fotos", f.blob, `f${i}.jpg`));
+  $("salvar").disabled = true; msg("aviso", "Processando fotos…");
+  try {
+    const r = await api("/api/usuarios", { method: "POST", body: fd }, true);
+    msg("ok", `Cadastro concluído com ${r.biometrias} biometrias.`);
+    $("form").reset(); $("limpar").onclick(); atualizar();
+  } catch (e) { msg("no", e.message); }
+  $("salvar").disabled = false;
+};
+
+// Cada parte inicia sozinha: se a lista de divisões falhar, a câmera continua funcionando (e vice-versa).
+exigirAdmin().then(async () => {
+  atualizar(); desenharFotos();
+  const erros = [];
+  try {
+    const d = await api("/api/divisoes", {}, true);
+    $("divisao").innerHTML = d.length
+      ? d.map(x => `<option value="${x.id}">${esc(x.nome)}</option>`).join("")
+      : `<option value="">(nenhuma divisão cadastrada)</option>`;
+  } catch (e) { erros.push("Divisões: " + e.message); }
+  try { await abrirCamera($("video")); }
+  catch (e) { erros.push("Câmera: " + e.message); }
+  if (erros.length) msg("aviso", erros.join("  "));
+});
+</script></body></html>

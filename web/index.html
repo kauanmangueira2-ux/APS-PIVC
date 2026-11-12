@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terminal · Cofre Biométrico</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+  <div class="pagina">
+    <h1>Terminal de acesso</h1>
+    <p class="sub">Posicione o rosto no centro da imagem, escolha o recurso e autentique.</p>
+  </div>
+  <div class="terminal">
+    <section class="card" aria-label="Câmera">
+      <div class="cam">
+        <video id="video" playsinline muted></video>
+        <div class="guia"></div>
+        <span class="chip" id="chip">Câmera inativa</span>
+      </div>
+      <div class="prog" id="prog" hidden><span></span></div>
+    </section>
+    <section class="card painel" aria-label="Autenticação">
+      <h2>Autenticação</h2>
+      <label>Recurso <select id="recurso"></select></label>
+      <label id="boxPin" hidden>PIN (6 dígitos)
+        <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+      <p id="dica" class="nota" hidden>Cofre principal: após clicar em <b>Autenticar</b>, olhe para a câmera e <b>pisque duas vezes</b> durante a captura (cerca de 3 segundos). Fique sozinho no enquadramento.</p>
+      <button id="ir">Autenticar</button>
+      <div id="saida" aria-live="polite">
+        <div class="vazio">Aguardando autenticação.</div>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let recursos = [], bloqueio = null;
+
+// Terminal travado por tentativas negadas: mostra a contagem e libera o botão sozinho no fim.
+function contarBloqueio(segundos) {
+  clearInterval(bloqueio);
+  let resta = segundos;
+  const passo = () => {
+    if (resta <= 0) {
+      clearInterval(bloqueio); bloqueio = null;
+      $("ir").disabled = false; chip("Câmera ativa", true);
+      return mostrar("aviso", "Terminal liberado", "Você já pode tentar de novo.");
+    }
+    $("ir").disabled = true; chip(`Bloqueado · ${resta}s`);
+    mostrar("no", "Terminal bloqueado", `Muitas tentativas negadas seguidas. Aguarde ${resta}s.`);
+    resta--;
+  };
+  passo(); bloqueio = setInterval(passo, 1000);
+}
+
+function mostrar(classe, titulo, detalhe = "") { $("saida").innerHTML = bloco(classe, titulo, detalhe); }
+function chip(texto, ligado = false) { $("chip").textContent = texto; $("chip").classList.toggle("on", ligado); }
+function progresso(p) {
+  $("prog").hidden = p == null;
+  if (p != null) $("prog").firstElementChild.style.width = Math.round(p * 100) + "%";
+}
+
+function atualizarCampos() {
+  const r = recursos.find(x => x.id == $("recurso").value);
+  const n3 = r && r.nivel_minimo >= 3;
+  $("boxPin").hidden = $("dica").hidden = !n3;
+}
+
+async function iniciar() {
+  try {
+    recursos = await api("/api/recursos");
+    $("recurso").innerHTML = recursos.map(r => `<option value="${r.id}">${esc(r.nome)} · nível ${r.nivel_minimo}+</option>`).join("");
+    atualizarCampos();
+    await abrirCamera($("video"));
+    chip("Câmera ativa", true);
+  } catch (e) { mostrar("aviso", e.message); $("ir").disabled = true; chip("Câmera indisponível"); }
+}
+
+$("recurso").onchange = atualizarCampos;
+
+$("ir").onclick = async () => {
+  const r = recursos.find(x => x.id == $("recurso").value);
+  if (!r) return;
+  const n3 = r.nivel_minimo >= 3;
+  if (n3 && !/^\d{6}$/.test($("pin").value)) return mostrar("aviso", "Digite o PIN de 6 dígitos.");
+  $("ir").disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("recurso_id", r.id);
+    fd.append("pin", $("pin").value);
+    // nível 3 envia uma rajada (~3 s) para a prova de vida; os demais, um quadro
+    const total = n3 ? 15 : 1;
+    if (n3) {
+      mostrar("aviso", "Prepare-se", "A captura começa em instantes. Olhe para a câmera e pisque duas vezes.");
+      chip("Prepare-se…"); await esperar(1200);
+      mostrar("aviso", "Pisque agora", "Capturando…");
+    } else mostrar("aviso", "Verificando…");
+    for (let i = 0; i < total; i++) {
+      chip(n3 ? `Capturando ${i + 1}/${total}` : "Capturando", true);
+      progresso(n3 ? i / total : null);
+      fd.append("imagens", await quadro($("video")), `q${i}.jpg`);
+      if (n3) await esperar(200);
+    }
+    progresso(null); chip("Verificando…", true);
+    mostrar("aviso", "Verificando…");
+    const res = await api("/api/reconhecer", { method: "POST", body: fd });
+    const quem = res.usuario ? `${res.usuario} · nível ${res.nivel} · ` : "";
+    mostrar(res.concedido ? "ok" : "no", res.mensagem, `${quem}similaridade ${res.score}`);
+  } catch (e) {
+    if (e.dados?.erro === "terminal_bloqueado" && e.dados.segundos) {
+      progresso(null); $("pin").value = "";
+      return contarBloqueio(e.dados.segundos);
+    }
+    mostrar("aviso", e.message);
+  }
+  progresso(null); chip("Câmera ativa", true);
+  $("pin").value = "";
+  $("ir").disabled = false;
+};
+iniciar();
+</script></body></html>

@@ -1,0 +1,172 @@
+/* Cofre Biométrico — interface administrativa e terminal.
+   Paleta neutra (cinza-ardósia) com um único acento; cores semânticas só para estados. */
+:root{
+  --bg:#F4F5F7; --sf:#FFFFFF; --sf2:#F8F9FB; --ink:#1F2933; --mut:#667085;
+  --line:#E2E5EA; --line2:#CDD3DB;
+  --ac:#334155; --ac-h:#1E293B; --ac-ink:#FFFFFF; --ac-soft:#EEF1F5;
+  --ok:#2F6B4F; --ok-bg:#EAF3EE; --no:#9B3B33; --no-bg:#F8ECEA; --warn:#7C5F1C; --warn-bg:#F7F1E1;
+  --shadow:0 1px 2px rgba(16,24,40,.06);
+  --r:8px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0E1217; --sf:#161B22; --sf2:#1B212A; --ink:#E6E9EE; --mut:#98A2B3;
+  --line:#28303A; --line2:#3A444F;
+  --ac:#CBD5E1; --ac-h:#E2E8F0; --ac-ink:#0F172A; --ac-soft:#1F2733;
+  --ok:#7FBF9E; --ok-bg:#15281F; --no:#E08A80; --no-bg:#2B1A18; --warn:#D9B661; --warn-bg:#2A2314;
+  --shadow:none; color-scheme:dark;
+}}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}   /* sem isto, "label{display:flex}" anula o atributo hidden */
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,system-ui,sans-serif}
+h1,h2{margin:0;font-weight:650;letter-spacing:-.01em}
+h1{font-size:1.45rem}
+h2{font-size:1.02rem}
+a{color:var(--ac)}
+small{font-size:.82rem}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+
+/* ---------- barra superior ---------- */
+.topbar{display:flex;align-items:center;gap:28px;padding:0 28px;height:56px;background:var(--sf);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-weight:650;color:var(--ink);text-decoration:none;white-space:nowrap}
+.brand svg{width:22px;height:22px;color:var(--ac)}
+.topbar nav{display:flex;gap:4px;height:100%;flex:1;align-items:stretch}
+.topbar nav a{display:flex;align-items:center;padding:0 12px;color:var(--mut);text-decoration:none;font-weight:550;font-size:.92rem;border-bottom:2px solid transparent;margin-bottom:-1px}
+.topbar nav a:hover{color:var(--ink)}
+.topbar nav a.on{color:var(--ink);border-bottom-color:var(--ac)}
+.topbar .sair{margin-left:auto;align-self:center;color:var(--mut);font-size:.88rem;text-decoration:none;padding:6px 10px;border:1px solid var(--line);border-radius:6px}
+.topbar .sair:hover{color:var(--ink);border-color:var(--line2)}
+
+/* ---------- estrutura ---------- */
+main{max-width:1080px;margin:0 auto;padding:28px 28px 48px}
+.pagina{margin-bottom:22px}
+.pagina .sub{margin:4px 0 0;color:var(--mut)}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card>h2{margin-bottom:14px}
+.painel>h2,.login>h2{margin-bottom:0}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+.grow{flex:1 1 180px}
+.mut{color:var(--mut)}
+.nota{margin:0;font-size:.88rem;color:var(--mut);background:var(--sf2);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+
+/* ---------- formulários e botões ---------- */
+label{display:flex;flex-direction:column;gap:6px;font-size:.82rem;font-weight:550;color:var(--mut)}
+input,select,button{font:inherit;color:var(--ink)}
+input,select{padding:9px 11px;border:1px solid var(--line2);border-radius:6px;background:var(--sf);min-height:38px}
+input:focus,select:focus{outline:2px solid var(--ac);outline-offset:-1px;border-color:var(--ac)}
+input::placeholder{color:var(--mut);opacity:.7}
+button{padding:9px 16px;min-height:38px;border:1px solid var(--ac);border-radius:6px;background:var(--ac);color:var(--ac-ink);font-weight:600;font-size:.92rem;cursor:pointer;transition:background .12s,border-color .12s}
+button:hover:not(:disabled){background:var(--ac-h);border-color:var(--ac-h)}
+button.sec{background:var(--sf);color:var(--ink);border-color:var(--line2)}
+button.sec:hover:not(:disabled){background:var(--sf2);border-color:var(--mut)}
+button.perigo{background:var(--sf);color:var(--no);border-color:var(--line2)}
+button.perigo:hover:not(:disabled){background:var(--no-bg);border-color:var(--no)}
+button.peq{padding:5px 10px;min-height:30px;font-size:.82rem;white-space:nowrap}
+button:disabled{opacity:.5;cursor:not-allowed}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ---------- câmera ---------- */
+.cam{position:relative;aspect-ratio:4/3;background:#0B0E12;border-radius:var(--r);overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.cam .guia{position:absolute;left:50%;top:50%;width:46%;aspect-ratio:3/4;transform:translate(-50%,-50%);border:2px dashed rgba(255,255,255,.55);border-radius:50%;pointer-events:none}
+.cam .chip{position:absolute;left:12px;top:12px;font-size:.78rem;font-weight:600;color:#fff;background:rgba(15,19,24,.72);padding:4px 10px;border-radius:99px;backdrop-filter:blur(4px)}
+.cam .chip.on::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#7FBF9E;margin-right:7px}
+.prog{height:4px;background:var(--line);border-radius:4px;margin-top:12px;overflow:hidden}
+.prog span{display:block;height:100%;width:0;background:var(--ac);transition:width .2s linear}
+.fotos{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.foto{position:relative;width:96px}
+.foto img{display:block;width:96px;height:72px;object-fit:cover;border-radius:6px;border:2px solid var(--line)}
+.foto.ok img{border-color:var(--ok)}
+.foto.no img{border-color:var(--no)}
+.foto .estado{display:block;font-size:.72rem;line-height:1.3;margin-top:4px;color:var(--mut)}
+.foto.ok .estado{color:var(--ok)}
+.foto.no .estado{color:var(--no)}
+.foto.aviso .estado{color:var(--warn)}
+.foto button{position:absolute;right:-6px;top:-6px;width:20px;height:20px;min-height:0;padding:0;border-radius:50%;background:var(--ink);color:var(--bg);border-color:var(--ink);font-size:.8rem;line-height:1}
+
+/* ---------- terminal ---------- */
+.terminal{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.terminal .card{margin-bottom:0}
+.painel{display:flex;flex-direction:column;gap:14px}
+.vazio{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:.9rem;border:1px dashed var(--line2);border-radius:var(--r);padding:16px}
+
+/* ---------- resultados ---------- */
+.resultado{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:var(--r);border:1px solid;font-weight:600}
+.resultado svg{flex:none;width:22px;height:22px;margin-top:1px}
+.resultado small{display:block;font-weight:400;margin-top:2px;opacity:.9}
+.resultado.ok{background:var(--ok-bg);border-color:color-mix(in srgb,var(--ok) 35%,transparent);color:var(--ok)}
+.resultado.no{background:var(--no-bg);border-color:color-mix(in srgb,var(--no) 35%,transparent);color:var(--no)}
+.resultado.aviso{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 35%,transparent);color:var(--warn)}
+.card .resultado{margin-top:14px}
+.painel .resultado{margin-top:0}
+
+/* ---------- tabelas ---------- */
+.card.tbl{padding:0;overflow:hidden}
+.tbl .rolagem{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.89rem}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+thead th{background:var(--sf2);color:var(--mut);font-size:.72rem;font-weight:650;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--sf2)}
+td select{padding:5px 8px;min-height:32px;font-size:.86rem;max-width:165px}
+td .acoes{flex-wrap:nowrap}
+td small{color:var(--mut)}
+.vazio-tab{text-align:center;color:var(--mut);padding:28px!important}
+.resumo{padding:10px 16px;border-top:1px solid var(--line);color:var(--mut);font-size:.82rem;background:var(--sf2)}
+
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.76rem;font-weight:600;white-space:nowrap;background:var(--ac-soft);color:var(--mut)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.no{background:var(--no-bg);color:var(--no)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+
+.banner{display:flex;align-items:center;gap:10px;background:var(--no-bg);color:var(--no);border-bottom:1px solid color-mix(in srgb,var(--no) 35%,transparent);padding:11px 28px;font-weight:600;font-size:.92rem}
+.banner svg{width:18px;height:18px;flex:none}
+
+/* ---------- login administrativo e diálogos ---------- */
+body.admin:not(.liberado) main,body.admin:not(.liberado) .banner{display:none}
+.loginbg{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.login{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;margin:0;padding:26px}
+.login .marca{display:flex;align-items:center;gap:10px;font-weight:650}
+.login .marca svg{width:24px;height:24px;color:var(--ac)}
+.login h2{font-size:1.15rem}
+.login p{margin:0;color:var(--mut);font-size:.9rem}
+.login .erro{color:var(--no);font-weight:600;font-size:.88rem}
+dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--sf);color:var(--ink);padding:0;max-width:380px;width:calc(100% - 32px);box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(15,19,24,.5)}
+dialog form{display:flex;flex-direction:column;gap:14px;padding:22px}
+dialog p{margin:0;color:var(--mut);font-size:.9rem}
+
+/* ---------- números do dia ---------- */
+.numeros{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.numero{background:var(--sf);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
+.numero span{display:block;font-size:.76rem;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+.numero strong{display:block;font-size:1.6rem;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+.numero.ok strong{color:var(--ok)}
+.numero.no strong{color:var(--no)}
+.numero small{color:var(--mut)}
+
+/* ---------- visor de imagem ---------- */
+dialog.visor{max-width:min(860px,calc(100% - 32px))}
+dialog.visor form{gap:12px}
+.visor-topo{display:flex;align-items:center;justify-content:space-between;gap:12px}
+dialog.visor img{display:block;width:100%;height:auto;max-height:72vh;object-fit:contain;border-radius:6px;background:#0B0E12}
+button.link{background:none;border:0;padding:0;min-height:0;color:var(--ac);font-weight:550;text-decoration:underline;font-size:inherit}
+button.link:hover:not(:disabled){background:none;color:var(--ink)}
+
+/* ---------- cadastro ---------- */
+.cadastro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.cadastro .card{margin-bottom:0}
+.campos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.campos .largo{grid-column:1/-1}
+
+@media (max-width:860px){
+  .numeros{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .terminal,.cadastro{grid-template-columns:1fr}
+  .topbar{padding:0 16px;gap:12px;overflow-x:auto}
+  main{padding:20px 16px 40px}
+  .banner{padding:11px 16px}
+}
+@media (max-width:520px){.campos{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}

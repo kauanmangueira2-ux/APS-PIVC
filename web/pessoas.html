@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pessoas · Cofre Biométrico</title><link rel="stylesheet" href="style.css"></head>
+<body class="admin"><main>
+  <div class="pagina">
+    <h1>Gerenciar pessoas</h1>
+    <p class="sub">Altere nível e divisão, ative ou desative o acesso e remova cadastros.</p>
+  </div>
+  <div class="card row">
+    <label class="grow">Buscar <input id="busca" type="search" placeholder="Nome, matrícula ou cargo"></label>
+  </div>
+  <div id="saida" aria-live="polite"></div>
+  <div class="card tbl"><div class="rolagem"><table>
+    <thead><tr><th>Pessoa</th><th>Matrícula</th><th>Divisão</th><th>Nível</th><th>Biometrias</th><th>Status</th><th></th></tr></thead>
+    <tbody id="corpo"></tbody></table></div>
+    <div class="resumo" id="resumo"></div></div>
+</main>
+<script src="app.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let divisoes = [], pessoas = [];
+
+function msg(classe, t) { $("saida").innerHTML = bloco(classe, t); }
+
+function linha(p) {
+  const nivel = [1, 2, 3].map(n => `<option ${p.nivel === n ? "selected" : ""}>${n}</option>`).join("");
+  const div = `<option value="">—</option>` + divisoes.map(d => `<option value="${d.id}" ${p.divisao_id === d.id ? "selected" : ""}>${esc(d.nome)}</option>`).join("");
+  return `<tr data-id="${p.id}">
+    <td>${esc(p.nome)}<br><small>${esc(p.cargo)}</small></td><td>${esc(p.matricula)}</td>
+    <td><select class="div" aria-label="Divisão">${div}</select></td>
+    <td><select class="niv" aria-label="Nível">${nivel}</select></td>
+    <td>${p.biometrias}</td>
+    <td><span class="pill ${p.ativo ? "ok" : ""}">${p.ativo ? "Ativo" : "Inativo"}</span></td>
+    <td><div class="acoes"><button class="peq salvar">Salvar</button>
+      ${p.nivel === 3 ? `<button class="peq sec pin" title="Redefinir o PIN">Novo PIN</button>` : ""}
+      <button class="peq sec alt">${p.ativo ? "Desativar" : "Ativar"}</button>
+      <button class="peq perigo rem">Remover</button></div></td></tr>`;
+}
+
+function desenhar() {
+  const q = $("busca").value.trim().toLowerCase();
+  const lista = pessoas.filter(p => !q || [p.nome, p.matricula, p.cargo].some(v => String(v ?? "").toLowerCase().includes(q)));
+  $("corpo").innerHTML = lista.map(linha).join("")
+    || `<tr><td colspan="7" class="vazio-tab">${pessoas.length ? "Nenhuma pessoa encontrada para a busca." : "Nenhuma pessoa cadastrada."}</td></tr>`;
+  $("resumo").textContent = `${lista.length} de ${pessoas.length} pessoa(s)`;
+}
+
+async function carregar() {
+  try {
+    [divisoes, pessoas] = await Promise.all([api("/api/divisoes", {}, true), api("/api/usuarios", {}, true)]);
+    desenhar();
+  } catch (e) { msg("no", e.message); }
+}
+
+async function enviar(id, dados) {
+  try {
+    await api(`/api/usuarios/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados) }, true);
+    msg("ok", "Alteração salva."); carregar();
+  } catch (e) { msg("no", e.message); }
+}
+
+$("busca").oninput = desenhar;
+$("corpo").onclick = async ev => {
+  const botao = ev.target.closest("button"), tr = ev.target.closest("tr");
+  if (!tr || !botao) return;
+  const id = tr.dataset.id, p = pessoas.find(x => x.id == id);
+  if (botao.classList.contains("salvar")) {
+    const nivel = +tr.querySelector(".niv").value;
+    const dados = { nivel, divisao_id: tr.querySelector(".div").value ? +tr.querySelector(".div").value : null };
+    if (nivel === 3 && !p.tem_pin) {
+      const pin = await pedirPin("Nível 3 exige um PIN de 6 dígitos."); if (!pin) return;
+      dados.pin = pin;
+    }
+    enviar(id, dados);
+  } else if (botao.classList.contains("pin")) {
+    const pin = await pedirPin(`Novo PIN de 6 dígitos para ${p.nome}.`); if (!pin) return;
+    enviar(id, { pin });
+  } else if (botao.classList.contains("alt")) {
+    enviar(id, { ativo: !p.ativo });
+  } else if (botao.classList.contains("rem")) {
+    if (botao.dataset.confirma !== "1") {  // confirmação em dois cliques
+      botao.dataset.confirma = "1"; botao.textContent = "Confirmar?";
+      return setTimeout(() => { botao.dataset.confirma = ""; botao.textContent = "Remover"; }, 3000);
+    }
+    try { await api(`/api/usuarios/${id}`, { method: "DELETE" }, true); msg("ok", "Pessoa removida."); carregar(); }
+    catch (e) { msg("no", e.message); }
+  }
+};
+exigirAdmin().then(carregar);
+</script></body></html>
